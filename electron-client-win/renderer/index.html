@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>kk远程连接</title><link rel="stylesheet" href="./styles.css"></head>
+<body><main class="shell">
+<section class="pairing">
+  <h1 id="pairing-title">六位配对码</h1>
+  <div class="pin-row">
+    <div id="pin-value" aria-live="polite">------</div>
+    <div class="pin-actions">
+      <button id="btn-copy-pin" class="icon-button" type="button" title="复制验证码" aria-label="复制验证码" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <rect x="8" y="8" width="11" height="11" rx="2"></rect>
+          <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path>
+        </svg>
+      </button>
+      <button id="btn-refresh-pin" class="icon-button" type="button" title="刷新配对码" aria-label="刷新配对码" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 7v5h-5"></path>
+          <path d="M4 17v-5h5"></path>
+          <path d="M5.5 9A7 7 0 0 1 18 7l2 5M4 12l2 5a7 7 0 0 0 12.5-2"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+  <div class="pin-status">
+    <p id="connection-route" class="connection-route" role="status"></p>
+    <p id="pin-feedback" class="pin-feedback" role="status" aria-live="polite"></p>
+    <p id="assist-status" class="pin-feedback" role="status"></p>
+  </div>
+<label id="relay-address" class="address" hidden>连接地址<input id="relay-url" aria-label="连接地址" spellcheck="false"></label>
+<div class="buttons">
+  <button id="btn-connect" class="primary connection-action" type="button" data-connection="idle" disabled>
+    <span id="connection-chip" aria-live="polite">开始</span>
+    <span class="connection-fill" aria-hidden="true"><span class="connection-ink"></span></span>
+  </button>
+  <div class="disconnect-action">
+    <button id="btn-disconnect" type="button" disabled>断开</button>
+    <div id="log-toast" class="log-toast" hidden>
+      <span id="log-toast-message" role="status"></span>
+      <button id="btn-open-log" type="button" hidden>打开日志</button>
+    </div>
+  </div>
+</div>
+</section>
+<section class="details">
+  <div class="log-header">
+    <h2>操作记录</h2>
+    <div class="log-mode" role="group" aria-label="记录显示方式">
+      <label><input id="mode-brief" type="radio" name="log-mode" checked>简略</label>
+      <label><input id="mode-detailed" type="radio" name="log-mode">详细</label>
+    </div>
+  </div>
+  <p id="mode-help" class="mode-help">仅显示命令</p>
+  <div id="log-box" data-mode="brief" role="log" aria-label="终端操作记录" tabindex="0"></div>
+</section>
+</main><script src="./renderer.js"></script></body></html>

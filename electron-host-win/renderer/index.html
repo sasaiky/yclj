@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>本机连接中心</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="header">
+      <div><p class="eyebrow">同事电脑检查助手</p><h1>本机连接中心</h1></div>
+      <span id="service-status" class="status is-starting" role="status">正在启动</span>
+    </header>
+
+    <section class="card">
+      <div class="section-heading"><div><h2>给同事的连接地址</h2><p>让同事复制到他客户端的“连接地址”中。</p></div><button id="refresh-addresses" class="text-button" type="button">重新检测</button></div>
+      <div id="address-list" class="address-list"></div>
+      <p id="service-message" class="service-message" role="status"></p>
+      <div class="service-actions"><span>本机监听端口 <strong id="port-value">18081</strong></span><button id="toggle-service" type="button">停止服务</button></div>
+    </section>
+
+    <section class="card pairing-card">
+      <div class="section-heading"><div><h2>连接同事</h2><p>输入同事客户端显示的六位验证码。</p></div></div>
+      <form id="pair-form" class="pair-form">
+        <input id="pair-pin" type="text" inputmode="numeric" pattern="[0-9]{6}" autocomplete="one-time-code" placeholder="六位验证码" aria-label="同事的六位验证码" required>
+        <button id="pair-button" type="submit" disabled>连接</button>
+      </form>
+      <p id="pair-message" class="pair-message" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="card peers-card">
+      <div class="section-heading"><div><h2>已连接的同事 <span id="peer-count">0</span></h2><p>显示同事电脑向本机发起连接时使用的地址。</p></div></div>
+      <div id="peer-list" class="peer-list" aria-live="polite"></div>
+    </section>
+
+    <p class="footer">关闭窗口时可选择只关闭面板或同时退出服务；继续运行时可从系统托盘重新打开。</p>
+    <p id="toast" class="toast" role="status" aria-live="polite"></p>
+  </main>
+  <script src="./renderer.js"></script>
+</body>
+</html>

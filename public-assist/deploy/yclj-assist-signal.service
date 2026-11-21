@@ -1,0 +1,18 @@
+[Unit]
+Description=YCLJ public assist signaling
+After=network.target
+
+[Service]
+DynamicUser=yes
+EnvironmentFile=/opt/yclj-assist/signaling.env
+ExecStart=/opt/yclj-assist/runtime/node /opt/yclj-assist/app/server.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+MemoryMax=128M
+
+[Install]
+WantedBy=multi-user.target

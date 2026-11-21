@@ -1,0 +1,95 @@
+{
+    "name": "yclj-stack",
+    "version": "0.1.10",
+    "private": true,
+    "description": "Relay + operator CLI + headless client CLI + Windows desktop client",
+    "main": "electron-client-win/main.js",
+    "bin": {
+        "yclj-relay": "./relay/index.js",
+        "yclj": "./operator-cli/index.js",
+        "yclj-config": "./tools/assist-config.js",
+        "yclj-client": "./client-cli/index.js"
+    },
+    "scripts": {
+        "relay": "node relay/index.js",
+        "operator": "node operator-cli/index.js",
+        "client": "node client-cli/index.js",
+        "assist:server": "node public-assist/server.js",
+        "assist:config": "node tools/assist-config.js",
+        "assist:test": "node tests/public-assist-runner.js",
+        "smoke": "node tests/smoke.js",
+        "pack:client:linux": "pkg client-cli/index.js --targets node18-linux-x64 --output dist/yclj-client",
+        "win-client:start": "electron electron-client-win/main.js",
+        "win-client:check": "node --check electron-client-win/main.js && node --check electron-client-win/preload.js && node --check electron-client-win/renderer/renderer.js && node --check electron-client-win/terminal-display.js && node --check electron-client-win/session-log.js",
+        "win-client:pin-test": "electron tests/pin-refresh.js",
+        "win-client:dist": "electron-builder --win --x64 --projectDir .",
+        "win-host:start": "electron electron-host-win/main.js",
+        "win-host:background": "electron electron-host-win/main.js --background",
+        "win-host:check": "node --check electron-host-win/main.js && node --check electron-host-win/preload.js && node --check electron-host-win/renderer/renderer.js && node --check electron-host-win/script-runner.js && node --check operator-cli/host-control.js",
+        "win-host:test": "electron tests/host-dashboard.js",
+        "win-host:script-test": "node tests/host-script.js",
+        "win-host:dist": "electron-builder --win --x64 --config electron-host-win/build.json"
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "dependencies": {
+        "chalk": "^4.1.2",
+        "node-pty": "^1.0.0",
+        "ora": "^5.4.1",
+        "uuid": "^11.1.0",
+        "ws": "8.23.0"
+    },
+    "devDependencies": {
+        "electron": "45.4.1",
+        "electron-builder": "^24.13.3",
+        "pkg": "^5.8.1"
+    },
+    "build": {
+        "extraMetadata": {
+            "name": "yclj-client-win",
+            "version": "0.1.30"
+        },
+        "appId": "com.yclj.client.win",
+        "productName": "远程帮助客户端",
+        "artifactName": "KK_SSH-clent-win setup ${version}.${ext}",
+        "directories": {
+            "output": "release-win-client"
+        },
+        "files": [
+            "electron-client-win/**/*",
+            "public-assist/protocol.js",
+            "public-assist/peer.js",
+            "public-assist/rtc*",
+            "build-assets/**/*",
+            "node_modules/**/*",
+            "package.json",
+            "!tests/**",
+            "!relay/**",
+            "!operator-cli/**",
+            "!client-cli/**",
+            "!README.md"
+        ],
+        "asarUnpack": [
+            "node_modules/node-pty/**"
+        ],
+        "win": {
+            "executableName": "远程帮助客户端",
+            "icon": "build-assets/kunkunxin4.ico",
+            "target": [
+                {
+                    "target": "nsis",
+                    "arch": [
+                        "x64"
+                    ]
+                }
+            ]
+        },
+        "nsis": {
+            "include": "build-assets/installer-close-running.nsh",
+            "shortcutName": "kk远程连接",
+            "installerIcon": "build-assets/kunkunxin4.ico",
+            "uninstallerIcon": "build-assets/kunkunxin4.ico"
+        }
+    }
+}

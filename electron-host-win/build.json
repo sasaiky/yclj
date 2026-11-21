@@ -1,0 +1,29 @@
+{
+  "appId": "com.yclj.host.win",
+  "productName": "远程帮助主机端",
+  "artifactName": "KK_SSH-host-win setup ${version}.${ext}",
+  "directories": { "output": "release-host-client" },
+  "extraMetadata": { "name": "yclj-host-win", "version": "0.1.12", "main": "electron-host-win/main.js" },
+  "files": [
+    "electron-host-win/**/*",
+    "build-assets/**/*",
+    "relay/**/*",
+    "node_modules/**/*",
+    "package.json",
+    "!tests/**",
+    "!operator-cli/**",
+    "!client-cli/**",
+    "!electron-client-win/**",
+    "!README.md"
+  ],
+  "win": {
+    "executableName": "远程帮助主机端",
+    "icon": "build-assets/kunkunxin4.ico",
+    "target": [{ "target": "nsis", "arch": ["x64"] }]
+  },
+  "nsis": {
+    "include": "build-assets/installer-close-running.nsh",
+    "installerIcon": "build-assets/kunkunxin4.ico",
+    "uninstallerIcon": "build-assets/kunkunxin4.ico"
+  }
+}

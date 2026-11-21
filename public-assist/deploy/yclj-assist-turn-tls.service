@@ -1,0 +1,7 @@
+[Unit]
+Description=Refresh YCLJ TURN TLS certificates
+After=docker.service yclj-assist-tls.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/yclj-assist/sync-turn-tls.sh

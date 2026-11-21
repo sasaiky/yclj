@@ -1,0 +1,9 @@
+[Unit]
+Description=Check for renewed YCLJ TURN TLS certificates
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=15min
+
+[Install]
+WantedBy=timers.target
