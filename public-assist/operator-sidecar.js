@@ -18,10 +18,18 @@ function exit(code = 0) {
 }
 
 process.on('disconnect', () => exit());
+process.on('message', input => {
+  if (input.type === 'close') return exit();
+  if (peer && !exiting && !peer.send(input)) {
+    send({ type: 'error', code: 'operation_unavailable', message: '当前会话无法发送该操作' });
+  }
+});
 process.once('message', async config => {
+  if (exiting) return;
   try {
     app.setPath('userData', config.profile);
     await app.whenReady();
+    if (exiting) return;
     const target = config.pin ? { pin: config.pin, url: config.url } : { invite: readInvite(config.invitation) };
     peer = connectPeer({ identity: getIdentity(config.deviceDirectory), ...target,
       operator: true, relayOnly: config.relayOnly, operatorPassword: config.operatorPassword });
@@ -36,10 +44,6 @@ process.once('message', async config => {
       exiting = true;
       if (!process.connected) return app.exit(0);
       process.send({ type: 'assist_closed', code, message }, () => app.exit(0));
-    });
-    process.on('message', input => {
-      if (input.type === 'close') return exit();
-      if (!peer.send(input)) send({ type: 'error', code: 'operation_unavailable', message: '当前会话无法发送该操作' });
     });
   } catch (error) {
     if (!process.connected) return exit(1);

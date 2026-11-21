@@ -60,7 +60,8 @@ function openPublic(config, relayOnly) {
     if (transport.readyState >= WebSocket.CLOSING) return;
     manual = true;
     transport.readyState = WebSocket.CLOSING;
-    if (child.connected) child.disconnect();
+    // Let the sidecar exit before the parent closes IPC so ChildProcess emits 'close'.
+    if (child.connected) child.send({ type: 'close' }, error => { if (error) child.kill(); });
     killTimer = setTimeout(() => child.kill(), 3000);
   };
   return transport;

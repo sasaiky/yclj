@@ -253,6 +253,13 @@ async function main() {
   await waitFor(() => connected.exitCode === 0, 'operator disconnected');
   assert.match(connected.output, /peer_disconnected|signal_unavailable/);
 
+  const operatorExit = operator(await newCode(), url, noDirectUdp ? ['--relay-only'] : []);
+  await waitFor(() => operatorExit.output.includes(`"route":"${expectedRoute}"`), 'operator ready for /exit', 35000);
+  operatorExit.child.stdin.write('/exit\n');
+  await waitFor(() => operatorExit.exitCode === 0, 'operator exits with stdin still open');
+  await waitFor(async () => (await state()).sessionId === null, 'client disconnected by /exit');
+  console.log('[assist] PASS operator /exit disconnects and exits without waiting for stdin EOF');
+
   if ((process.env.YCLJ_ASSIST_TURN_URLS || deployedUrl) && !noDirectUdp) {
     const script = path.join(base, 'operation.ps1');
     fs.writeFileSync(script, "Write-Output 'TURN-OK'\n", 'utf8');
