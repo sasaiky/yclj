@@ -9,6 +9,7 @@ const { openPublic } = require('./public-connection');
 const { deviceDirectory, configFile, lanConfigFile, loadConfiguredUrl, getLanToken, readConfig } = require('./settings');
 const { askPassphrase } = require('./device-transfer');
 const { createScriptRunner } = require('../electron-host-win/script-runner');
+const { waitForPowerShell } = require('./powershell-ready');
 const { terminalText } = require('./terminal-text');
 
 const args = process.argv.slice(2);
@@ -116,10 +117,13 @@ let paired = false;
 
 let ws;
 let rl;
-const runner = script && createScriptRunner(message => {
+let shellStartup;
+const runner = script && createScriptRunner(sendScriptMessage);
+
+function sendScriptMessage(message) {
   if (!sessionId || ws.readyState !== WebSocket.OPEN) throw new Error('协助会话已断开');
   sendObject({ ...message, session_id: sessionId });
-});
+}
 
 function writeLine(text) {
   process.stdout.write(`${text}\n`);
@@ -292,8 +296,13 @@ function outputMessage(message) {
   if (message.type === 'session' && message.action === 'paired') {
     sessionId = message.session_id;
     paired = true;
-    if (runner) {
-      Promise.resolve().then(() => runner.start(script.content)).then(result => {
+    if (runner && !shellStartup) {
+      shellStartup = waitForPowerShell(payload => sendScriptMessage({ type: 'exec', stream: 'stdin', payload }));
+      shellStartup.ready.then(reason => {
+        if (reason) return { status: 'unconfirmed', reason };
+        console.error('[session] PowerShell 已就绪');
+        return runner.start(script.content);
+      }).then(result => {
         writeJson(result);
         if (result.status !== 'finished' || result.exitCode !== 0) process.exitCode = 1;
       }).catch(error => {
@@ -307,8 +316,12 @@ function outputMessage(message) {
     }
   }
   if (message.type === 'session' && message.action === 'peer_disconnected') sessionId = null;
-  if (runner && message.type === 'exec') return runner.handle(message);
   if (runner) {
+    if (message.type === 'exec') {
+      shellStartup?.handle(message);
+      runner.handle(message);
+    }
+    if (message.type === 'session' && message.action === 'shell_exit') shellStartup?.stop('powershell_exited');
     if (message.type === 'error') console.error(terminalText(message.message));
     if (message.type === 'session' && message.action === 'route') console.error(`[session] path=${message.route}`);
     return;
@@ -407,6 +420,7 @@ function onMessage(raw) {
 
 function onClose(code, reasonBuffer) {
   sessionId = null;
+  shellStartup?.stop('disconnected');
   runner?.disconnect();
   if (publicMode && !paired && !terminated) process.exitCode = 1;
   if (!terminated) {

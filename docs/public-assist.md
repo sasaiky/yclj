@@ -21,6 +21,8 @@ node operator-cli/index.js 123456 --url wss://assist.example.com/assist --run ./
 
 每次新建连接使用一个新验证码。连上后验证码留在界面上，等待阶段的自动换码随即停止。原有命令、JSON 操作和 `/ui`、`/lb`、`/clear` 宏可用，脚本模式沿用 UTF-8 PowerShell 脚本。新版客户端和 CLI 的会话持续到任一端断开、退出或失联。服务器定期续发有时效的中继凭据。断开后已启动的独立进程可能继续运行。
 
+`--run` 配对后等待 Windows PowerShell 提示符，并用一条回显命令确认 Shell 就绪。出现发布者信任提示时选择「本次不运行」。30 秒内无法确认就绪时，CLI 返回 `powershell_ready_timeout`。
+
 配置 CLI 的 `init` 把服务器地址和设备公开 ID 保存到当前用户的 `assist-config.json`，默认使用当前设备的 ID。如果 Windows 和 Mac 都要发起协助，在两台设备分别执行 `device-id`，然后运行 `init` 时在服务器地址后传入英文逗号分隔的两个 ID。配置文件可以复制到打包用的 Windows 电脑。
 
 自己的 Windows 和 Mac 也可以共用已经授权的控制身份。用 `export-device` 和 `import-device` 迁移地址和私钥。导出默认加密，也可以显式选择免口令。 [跨设备使用步骤](quick-start.md#在自己的-mac-沿用现有控制身份)
