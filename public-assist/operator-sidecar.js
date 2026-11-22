@@ -32,7 +32,7 @@ process.once('message', async config => {
     if (exiting) return;
     const target = config.pin ? { pin: config.pin, url: config.url } : { invite: readInvite(config.invitation) };
     peer = connectPeer({ identity: getIdentity(config.deviceDirectory), ...target,
-      operator: true, relayOnly: config.relayOnly, operatorPassword: config.operatorPassword });
+      operator: true, relayOnly: config.relayOnly, viewScreen: config.viewScreen, operatorPassword: config.operatorPassword });
     config.operatorPassword = undefined;
     peer.on('waiting', device => send({ type: 'session', action: 'awaiting_approval', device }));
     peer.on('pairing', () => send({ type: 'session', action: 'connecting' }));

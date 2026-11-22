@@ -23,6 +23,12 @@ node operator-cli/index.js 123456 --url wss://assist.example.com/assist --run ./
 
 `--run` 配对后等待 Windows PowerShell 提示符，并用一条回显命令确认 Shell 就绪。出现发布者信任提示时选择「本次不运行」。30 秒内无法确认就绪时，CLI 返回 `powershell_ready_timeout`。
 
+### 屏幕共享
+
+使用支持屏幕共享的 Windows 客户端和交互式 CLI 配对。Windows 端点击「共享屏幕」后，协助端自动打开窗口显示 Windows 主屏幕。Windows 端可随时点击「停止共享」，命令会话继续运行。断开会话会结束采集并关闭画面。
+
+画面由 Electron 采集，沿用 WebRTC 直连或 TURN 中继。初版只发送视频，采集上限为 1280×720、15 帧/秒，视频编码上限为 700 kbps。视频和命令分别走媒体轨和数据通道，共用连接和链路带宽。遇到拥塞时，Windows 端可停止共享来释放视频带宽。
+
 配置 CLI 的 `init` 把服务器地址和设备公开 ID 保存到当前用户的 `assist-config.json`，默认使用当前设备的 ID。如果 Windows 和 Mac 都要发起协助，在两台设备分别执行 `device-id`，然后运行 `init` 时在服务器地址后传入英文逗号分隔的两个 ID。配置文件可以复制到打包用的 Windows 电脑。
 
 自己的 Windows 和 Mac 也可以共用已经授权的控制身份。用 `export-device` 和 `import-device` 迁移地址和私钥。导出默认加密，也可以显式选择免口令。 [跨设备使用步骤](quick-start.md#在自己的-mac-沿用现有控制身份)

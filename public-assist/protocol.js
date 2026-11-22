@@ -182,7 +182,7 @@ function operationAllowed(message, fromOperator, sessionId) {
   if (message.type === 'exec') {
     return typeof message.payload === 'string' && (fromOperator ? message.stream === 'stdin' : ['stdout', 'stderr'].includes(message.stream));
   }
-  if (!fromOperator) return message.type === 'session' && message.action === 'shell_exit';
+  if (!fromOperator) return message.type === 'session' && ['shell_exit', 'screen_started', 'screen_stopped'].includes(message.action);
   if (message.type !== 'ui') return false;
   if (message.action === 'clear') return true;
   if (['status', 'update_status'].includes(message.action)) return typeof message.data === 'string';

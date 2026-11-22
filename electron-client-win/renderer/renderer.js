@@ -1,7 +1,7 @@
 const refs = Object.fromEntries([
   'connection-chip', 'connection-route', 'pin-value', 'pin-feedback', 'btn-copy-pin', 'btn-refresh-pin',
   'log-box', 'btn-connect', 'btn-disconnect', 'relay-address', 'relay-url', 'mode-detailed',
-  'mode-brief', 'mode-help', 'log-toast', 'log-toast-message', 'btn-open-log', 'assist-status'
+  'mode-brief', 'mode-help', 'log-toast', 'log-toast-message', 'btn-open-log', 'assist-status', 'btn-share-screen'
 ].map(id => [id, document.getElementById(id)]));
 let addressInitialized = false;
 let feedbackTimer = null;
@@ -157,6 +157,11 @@ function applyState(next) {
   startButton.dataset.connection = connection;
   startButton.disabled = active;
   refs['btn-disconnect'].disabled = !active;
+  const shareButton = refs['btn-share-screen'];
+  shareButton.hidden = !next.screenShareAvailable;
+  shareButton.disabled = Boolean(next.screenShareBusy);
+  shareButton.textContent = next.screenSharing ? '停止共享' : '共享屏幕';
+  shareButton.setAttribute('aria-pressed', String(Boolean(next.screenSharing)));
   refs['relay-address'].hidden = !next.addressEditable;
   if (!addressInitialized && next.relayUrl) {
     refs['relay-url'].value = next.relayUrl;
@@ -208,6 +213,9 @@ refs['btn-connect'].onclick = () => {
   });
 };
 refs['btn-disconnect'].onclick = () => window.ycljClient.disconnect().then(applyState).catch(reportError);
+refs['btn-share-screen'].onclick = event => {
+  if (event.isTrusted) window.ycljClient.toggleScreenShare().then(applyState).catch(reportError);
+};
 refs['btn-open-log'].onclick = () => window.ycljClient.openLog().catch(error => {
   reportError(error);
   refs['log-toast-message'].textContent = '无法打开日志';

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, clipboard, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, clipboard, shell, desktopCapturer, screen } = require('electron');
 const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
@@ -36,6 +36,8 @@ const state = {
   pin: null,
   peerIp: '',
   sessionId: null,
+  screenSharing: false,
+  screenShareBusy: false,
   terminalMode: 'none',
   lastUiStatus: '',
   lastUiPlan: [],
@@ -69,6 +71,9 @@ function getStateSnapshot() {
     pinConsumed: pinConsumed(),
     peerIp: state.peerIp,
     sessionId: state.sessionId,
+    screenShareAvailable: Boolean(assist?.canShareScreen()),
+    screenSharing: state.screenSharing,
+    screenShareBusy: state.screenShareBusy,
     terminalMode: state.terminalMode,
     lastUiStatus: state.lastUiStatus,
     lastUiPlan: [...state.lastUiPlan],
@@ -160,6 +165,8 @@ function resetSessionState() {
   state.pin = null;
   state.peerIp = '';
   state.sessionId = null;
+  state.screenSharing = false;
+  state.screenShareBusy = false;
   state.lastUiStatus = '';
   state.lastUiPlan = [];
   state.terminalMode = 'none';
@@ -536,6 +543,15 @@ function startPublic(relayUrl, shell, closeReason = 'reconnect') {
     state.route = route;
     emitState();
   });
+  peer.on('screen', result => {
+    if (assist !== peer) return;
+    if (result) {
+      state.screenSharing = result.active;
+      state.screenShareBusy = false;
+      state.assistStatus = result.error || '';
+    }
+    emitState();
+  });
   peer.on('message', message => {
     if (assist !== peer || message.session_id !== state.sessionId) return;
     if (message.type === 'exec') {
@@ -602,6 +618,33 @@ app.whenReady().then(() => {
 
   ipcMain.handle('client:disconnect', () => {
     disconnectRelay('manual_disconnect');
+    return getStateSnapshot();
+  });
+
+  ipcMain.handle('client:toggle-screen-share', async event => {
+    const peer = assist;
+    if (event.sender !== mainWindow?.webContents || event.senderFrame !== event.sender.mainFrame ||
+        !peer?.canShareScreen() || state.screenShareBusy) return getStateSnapshot();
+
+    state.screenShareBusy = true;
+    state.assistStatus = '';
+    emitState();
+    try {
+      let sourceId;
+      if (!state.screenSharing) {
+        const primaryId = String(screen.getPrimaryDisplay().id);
+        const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
+        const primary = sources.find(source => source.display_id === primaryId) || (sources.length === 1 ? sources[0] : null);
+        if (!primary) throw new Error('找不到主屏幕');
+        sourceId = primary.id;
+      }
+      if (assist === peer && !peer.shareScreen(sourceId)) throw new Error('屏幕共享不可用');
+    } catch (error) {
+      if (assist === peer) {
+        state.screenShareBusy = false;
+        state.assistStatus = error.message;
+      }
+    }
     return getStateSnapshot();
   });
 

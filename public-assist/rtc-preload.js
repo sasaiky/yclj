@@ -1,6 +1,6 @@
 const { ipcRenderer } = require('electron');
 
-ipcRenderer.once('assist:rtc', (event, { operator, iceServers, relayOnly, dataLimit }) => {
+ipcRenderer.once('assist:rtc', (event, { operator, iceServers, relayOnly, viewScreen, dataLimit }) => {
   const [port] = event.ports;
   const report = (event, data) => port.postMessage({ event, data });
   const pc = new RTCPeerConnection({ iceServers, iceTransportPolicy: relayOnly ? 'relay' : 'all' });
@@ -12,6 +12,68 @@ ipcRenderer.once('assist:rtc', (event, { operator, iceServers, relayOnly, dataLi
   let statsPending = false;
   let pendingCandidates;
   let actions = Promise.resolve();
+  let screenTransceiver;
+  let captureTrack;
+  let incomingTrack;
+  let sharing = false;
+  const screenVideo = operator && viewScreen ? document.getElementById('screen') : null;
+
+  if (screenVideo) {
+    screenTransceiver = pc.addTransceiver('video', { direction: 'recvonly' });
+    screenVideo.addEventListener('playing', () => { if (sharing) report('screen_visible', true); });
+    pc.addEventListener('track', ({ track }) => {
+      if (track.kind !== 'video') return;
+      incomingTrack = track;
+      if (sharing) screenVideo.srcObject = new MediaStream([incomingTrack]);
+    });
+  }
+
+  function updateScreen(active) {
+    if (!screenVideo || sharing === active) return;
+    sharing = active;
+    screenVideo.srcObject = active && incomingTrack ? new MediaStream([incomingTrack]) : null;
+    if (!active) report('screen_visible', false);
+  }
+
+  async function stopScreen() {
+    if (!captureTrack) return;
+    captureTrack.stop();
+    captureTrack = null;
+    report('screen_capture', { active: false });
+    try { await screenTransceiver.sender.replaceTrack(null); } catch {
+      // The track is already stopped if ICE or the PeerConnection has closed.
+    }
+  }
+
+  async function startScreen(sourceId) {
+    if (operator || captureTrack) return;
+    if (screenTransceiver?.currentDirection !== 'sendonly') {
+      report('screen_capture', { active: false, error: '屏幕共享不可用' });
+      return;
+    }
+    try {
+      const sender = screenTransceiver.sender;
+      const parameters = sender.getParameters();
+      parameters.encodings[0].maxBitrate = 700_000;
+      parameters.degradationPreference = 'maintain-resolution';
+      await sender.setParameters(parameters);
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId,
+          maxWidth: 1280, maxHeight: 720, maxFrameRate: 15 } }
+      });
+      const [track] = stream.getVideoTracks();
+      captureTrack = track;
+      track.contentHint = 'detail';
+      track.addEventListener('ended', () => { if (captureTrack === track) void stopScreen(); });
+      await sender.replaceTrack(track);
+      if (captureTrack === track) report('screen_capture', { active: true });
+    } catch {
+      captureTrack?.stop();
+      captureTrack = null;
+      report('screen_capture', { active: false, error: '无法共享屏幕' });
+    }
+  }
 
   function bindChannel(active) {
     channel = active;
@@ -103,6 +165,9 @@ ipcRenderer.once('assist:rtc', (event, { operator, iceServers, relayOnly, dataLi
   });
 
   port.onmessage = ({ data: message }) => {
+    if (message.op === 'screen_start') return void startScreen(message.sourceId);
+    if (message.op === 'screen_stop') return void stopScreen();
+    if (message.op === 'screen_state') return updateScreen(message.active);
     if (message.op === 'data') {
       if (channel?.readyState !== 'open' || channel.bufferedAmount > dataLimit * 32) return report('fatal');
       try { channel.send(message.body); } catch { report('fatal'); }
@@ -121,7 +186,12 @@ ipcRenderer.once('assist:rtc', (event, { operator, iceServers, relayOnly, dataLi
           beginRecovery();
         }
         await pc.setRemoteDescription({ type: message.op, sdp: message.body });
-        if (!operator) await describe(await pc.createAnswer());
+        if (!operator) {
+          screenTransceiver = pc.getTransceivers().find(transceiver => transceiver.receiver.track.kind === 'video');
+          if (screenTransceiver) screenTransceiver.direction = 'sendonly';
+          await describe(await pc.createAnswer());
+          if (screenTransceiver) report('screen_available', screenTransceiver.currentDirection === 'sendonly');
+        }
         if (opened && ['connected', 'completed'].includes(pc.iceConnectionState)) {
           restarting = false;
           report('recovered');

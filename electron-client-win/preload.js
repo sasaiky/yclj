@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('ycljClient', {
   getState: () => ipcRenderer.invoke('client:get-state'),
   start: (config) => ipcRenderer.invoke('client:start', config),
   disconnect: () => ipcRenderer.invoke('client:disconnect'),
+  toggleScreenShare: () => ipcRenderer.invoke('client:toggle-screen-share'),
   openLog: () => ipcRenderer.invoke('client:open-log'),
   copyPin: () => ipcRenderer.invoke('client:copy-pin'),
   refreshPin: () => ipcRenderer.invoke('client:refresh-pin'),

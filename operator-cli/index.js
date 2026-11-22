@@ -436,6 +436,7 @@ function onClose(code, reasonBuffer) {
 async function start() {
   if (publicMode) {
     const config = legacyInvite ? { invitation: args[1] } : { pin: targetPin, url: signalUrl(relayUrl) };
+    config.viewScreen = !script;
     if (!legacyInvite) {
       if (fs.existsSync(configFile)) {
         const saved = readConfig(configFile);

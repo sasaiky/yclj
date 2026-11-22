@@ -96,6 +96,8 @@ h1, h2 { margin: 0; color: var(--muted); font-size: 14px; font-weight: 500; }
 .address, .buttons { margin-inline: 8px; }
 .buttons { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .buttons > .primary, .disconnect-action > button { width: 100%; min-width: 0; min-height: 42px; }
+#btn-share-screen { grid-column: 1 / -1; min-height: 38px; }
+#btn-share-screen[aria-pressed="true"] { border-color: #aa6455; color: #943b2b; }
 
 button {
   min-width: 102px;

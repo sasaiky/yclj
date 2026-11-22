@@ -1,2 +1,13 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'"><title></title></head><body></body></html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+  <title>YCLJ 屏幕共享</title>
+  <style>
+    body { margin: 0; background: #111; }
+    video { display: block; width: 100vw; height: 100vh; object-fit: contain; }
+  </style>
+</head>
+<body><video id="screen" aria-label="对方共享的屏幕" autoplay playsinline muted></video></body>
+</html>
