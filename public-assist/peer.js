@@ -42,6 +42,7 @@ function connectPeer({ identity, invite, pin, url, operator, trustedOperators, r
   let rtc;
   let screenAvailable = false;
   let screenQualitySupported = false;
+  let screenStopSupported = false;
   let inputCompatible = false;
   let inputActive = false;
   let sharingRequested = false;
@@ -99,8 +100,10 @@ function connectPeer({ identity, invite, pin, url, operator, trustedOperators, r
       if (operator && message.type === 'session' && ['screen_started', 'screen_stopped'].includes(message.action)) {
         const active = message.action === 'screen_started';
         screenQualitySupported = active && isScreenQuality(message.quality);
+        screenStopSupported = active && message.screenStop === true;
         inputActive = active && inputCompatible && message.screenInput === true;
-        if (viewScreen) rtc.send({ op: 'screen_state', active, quality: screenQualitySupported ? message.quality : null, input: inputActive });
+        if (viewScreen) rtc.send({ op: 'screen_state', active, quality: screenQualitySupported ? message.quality : null,
+          input: inputActive, canStop: screenStopSupported });
         return;
       }
       if (message.type === 'input') {
@@ -111,12 +114,20 @@ function connectPeer({ identity, invite, pin, url, operator, trustedOperators, r
         rtc.send({ op: 'screen_quality', quality: message.quality });
         return;
       }
+      if (!operator && message.type === 'session' && message.action === 'screen_stop') {
+        if (sharingRequested) peer.shareScreen();
+        return;
+      }
       peer.emit('message', message);
     } else if (event === 'screen_input' && operator && inputActive) {
       peer.send({ ...data, type: 'input', session_id: session });
     } else if (event === 'screen_quality' && operator && viewScreen && screenQualitySupported) {
       if (!peer.send({ type: 'session', action: 'screen_quality', quality: data, session_id: session })) {
         rtc.send({ op: 'screen_quality_failed' });
+      }
+    } else if (event === 'screen_stop' && operator && viewScreen && screenStopSupported) {
+      if (!peer.send({ type: 'session', action: 'screen_stop', session_id: session })) {
+        rtc.send({ op: 'screen_stop_failed' });
       }
     } else if (event === 'screen_available' && !operator) {
       screenAvailable = data === true;
@@ -126,7 +137,7 @@ function connectPeer({ identity, invite, pin, url, operator, trustedOperators, r
       if (inputActive && !input) peer.emit('input-release');
       inputActive = input;
       peer.send({ type: 'session', action: data.active ? 'screen_started' : 'screen_stopped',
-        quality: data.quality, screenInput: inputActive, session_id: session });
+        quality: data.quality, screenInput: inputActive, screenStop: true, session_id: session });
       peer.emit('screen', data);
     } else if (event === 'route' && phase === 'ready') {
       peer.emit('route', data);

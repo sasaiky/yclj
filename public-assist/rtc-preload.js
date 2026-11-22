@@ -18,12 +18,18 @@ function startRtc({ operator, iceServers, relayOnly, viewScreen, screenQualities
   let controlling = false;
   const screenVideo = operator && viewScreen ? document.getElementById('screen') : null;
   const qualitySelect = screenVideo && document.getElementById('screen-quality');
+  const stopButton = screenVideo && document.getElementById('screen-stop');
 
   if (screenVideo) {
     bindScreenInput();
     screenTransceiver = pc.addTransceiver('video', { direction: 'recvonly' });
     qualitySelect.addEventListener('change', () => {
       if (viewingQuality) report('screen_quality', qualitySelect.value);
+    });
+    stopButton.addEventListener('click', event => {
+      if (!event.isTrusted || stopButton.hidden || stopButton.disabled) return;
+      stopButton.disabled = true;
+      report('screen_stop');
     });
     screenVideo.addEventListener('playing', () => { if (sharing) report('screen_visible', true); });
     pc.addEventListener('track', ({ track }) => {
@@ -122,12 +128,14 @@ function startRtc({ operator, iceServers, relayOnly, viewScreen, screenQualities
     window.addEventListener('blur', release);
   }
 
-  function updateScreen(active, quality, input) {
+  function updateScreen(active, quality, input, canStop) {
     if (!screenVideo) return;
     controlling = active && input === true;
     if (!controlling) document.getElementById('screen-keyboard').blur();
     viewingQuality = active && quality;
-    document.getElementById('screen-controls').hidden = !viewingQuality && !controlling;
+    stopButton.hidden = !active || !canStop;
+    if (!active) stopButton.disabled = false;
+    document.getElementById('screen-controls').hidden = !viewingQuality && !controlling && stopButton.hidden;
     document.getElementById('screen-input-status').hidden = !controlling;
     document.getElementById('screen-quality-label').hidden = !viewingQuality;
     qualitySelect.hidden = !viewingQuality;
@@ -300,8 +308,12 @@ function startRtc({ operator, iceServers, relayOnly, viewScreen, screenQualities
   port.onmessage = ({ data: message }) => {
     if (message.op === 'screen_start') return void startScreen(message.sourceId);
     if (message.op === 'screen_stop') return void stopScreen();
-    if (message.op === 'screen_state') return updateScreen(message.active, message.quality, message.input);
+    if (message.op === 'screen_state') return updateScreen(message.active, message.quality, message.input, message.canStop);
     if (message.op === 'screen_quality') return queue(() => changeScreenQuality(message.quality));
+    if (message.op === 'screen_stop_failed' && stopButton) {
+      stopButton.disabled = false;
+      return;
+    }
     if (message.op === 'screen_quality_failed' && viewingQuality) {
       qualitySelect.value = viewingQuality;
       return;

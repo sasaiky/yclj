@@ -8,6 +8,7 @@ const { app, BrowserWindow, desktopCapturer, screen, session } = require('electr
 const { getIdentity } = require('../public-assist/protocol');
 const { createServer } = require('../public-assist/server');
 const { connectPeer } = require('../public-assist/peer');
+const { openRtc } = require('../public-assist/rtc');
 const { terminalText } = require('../operator-cli/terminal-text');
 const inputEvents = [];
 let inputReleases = 0;
@@ -45,13 +46,13 @@ async function waitFor(check, description) {
   throw new Error('Timeout: ' + description);
 }
 
-async function click(windowsClient) {
-  const contents = windowsClient.webContents;
+async function click(window, selector = '#btn-share-screen') {
+  const contents = window.webContents;
   const position = await contents.executeJavaScript(`(() => {
-    const box = document.querySelector('#btn-share-screen').getBoundingClientRect();
+    const box = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
     return { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) };
   })()`);
-  windowsClient.focus();
+  window.focus();
   contents.sendInputEvent({ type: 'mouseMove', ...position });
   contents.sendInputEvent({ type: 'mouseDown', ...position, button: 'left', clickCount: 1 });
   contents.sendInputEvent({ type: 'mouseUp', ...position, button: 'left', clickCount: 1 });
@@ -68,7 +69,18 @@ async function main() {
   await waitFor(() => evaluate('Boolean(window.ycljClient)'), 'Windows client preload');
   await evaluate(`window.ycljClient.start(${JSON.stringify({ relayUrl: url, shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/cat' })})`);
   const pin = await waitFor(async () => (await clientState()).pin, 'pairing code');
-  peer = connectPeer({ identity: operator, pin, url, operator: true, viewScreen: true });
+  let legacyReceiver = false;
+  const rtcFactory = (options, onEvent) => openRtc(options, event => {
+    if (legacyReceiver && event.event === 'data') {
+      const message = JSON.parse(event.data);
+      if (message.action === 'screen_started') {
+        delete message.screenStop;
+        return onEvent({ ...event, data: JSON.stringify(message) });
+      }
+    }
+    onEvent(event);
+  });
+  peer = connectPeer({ identity: operator, pin, url, operator: true, viewScreen: true, rtcFactory });
   await waitFor(async () => (await clientState()).screenShareAvailable, 'sharing capability');
 
   const rtcWindows = BrowserWindow.getAllWindows().filter(window => window !== windowsClient);
@@ -104,6 +116,7 @@ async function main() {
 
   assert.equal(viewer.isVisible(), false);
   assert.equal(await inViewer('document.querySelector("video").srcObject === null'), true);
+  assert.equal(await inViewer('document.querySelector("#screen-stop").hidden'), true);
   const { sessionId } = await clientState();
   const textInput = { type: 'input', action: 'text', text: '共享输入', session_id: sessionId };
   assert(peer.send(textInput));
@@ -116,17 +129,27 @@ async function main() {
   peer.on('message', message => {
     if (message.type === 'exec') commandOutput = (commandOutput + message.payload).slice(-4096);
   });
+
+  async function expectEcho(marker) {
+    const command = process.platform === 'win32' ? 'echo ' + marker : marker;
+    assert(peer.send({ type: 'exec', stream: 'stdin', payload: command + '\r\n', session_id: sessionId }));
+    await waitFor(() => terminalText(commandOutput).split('\n').some(line => line.trim() === marker),
+      'command output ' + marker);
+  }
+
   for (let index = 0; index < 2; index++) {
+    legacyReceiver = index === 1;
     await click(windowsClient);
     await waitFor(async () => (await clientState()).screenSharing, 'local share started');
     await waitFor(() => viewer.isVisible(), 'viewer opened');
     assert.equal(await inViewer('document.querySelector("video").videoHeight'), 720);
     assert.equal(await inCapture('globalThis.testVideoEncoding.maxBitrate'), 900_000);
     assert.equal(await inViewer('document.querySelector("#screen-controls").hidden'), false);
+    assert.equal(await inViewer('document.querySelector("#screen-stop").hidden'), legacyReceiver);
 
     if (index === 0) {
       assert.equal(await inViewer('document.querySelector("#screen-input-status").hidden'), false);
-      await clickViewer(viewer);
+      await click(viewer, '#screen');
       await waitFor(() => inputEvents.some(event => event.action === 'button' && event.down === false), 'viewer click forwarded');
       assert(peer.send(textInput));
       await waitFor(() => inputEvents.some(event => event.text === textInput.text), 'shared keyboard input forwarded');
@@ -148,14 +171,11 @@ async function main() {
       }
     }
 
-    const marker = 'YCLJ-VIDEO-CONTROL-' + index;
-    const command = process.platform === 'win32' ? 'echo ' + marker : marker;
-    assert(peer.send({ type: 'exec', stream: 'stdin', payload: command + '\r\n', session_id: sessionId }));
-    await waitFor(() => terminalText(commandOutput).split('\n').some(line => line.trim() === marker),
-      'command output during video');
+    await expectEcho('YCLJ-DURING-SHARE-' + index);
 
     const releasesBeforeStop = inputReleases;
-    await click(windowsClient);
+    if (index === 0) await click(viewer, '#screen-stop');
+    else await click(windowsClient);
     await waitFor(async () => !(await clientState()).screenSharing && !viewer.isVisible(), 'share stopped');
     assert.equal(await inViewer('document.querySelector("video").srcObject === null'), true);
     assert.equal(await inCapture('globalThis.testTrack.readyState'), 'ended');
@@ -164,25 +184,17 @@ async function main() {
     assert(peer.send(textInput));
     await delay(100);
     assert.equal(inputEvents.length, count, 'input stops with sharing');
+    assert.equal((await clientState()).sessionId, sessionId);
+    await expectEcho('YCLJ-AFTER-STOP-' + index);
   }
+  legacyReceiver = false;
   await click(windowsClient);
   await waitFor(() => viewer.isVisible(), 'viewer reopened before disconnect');
+  assert.equal(await inViewer('!document.querySelector("#screen-stop").hidden && !document.querySelector("#screen-stop").disabled'), true);
   assert.equal(captureSelections, 3);
   await evaluate('window.ycljClient.disconnect()');
   await waitFor(() => viewer.isDestroyed() && capture.isDestroyed(), 'RTC windows closed');
-  console.log('[screen] PASS consent, keyboard/mouse gating, all three quality settings, commands during video, stop, repeat, and disconnect');
-}
-
-async function clickViewer(window) {
-  const contents = window.webContents;
-  const position = await contents.executeJavaScript(`(() => {
-    const box = document.querySelector('video').getBoundingClientRect();
-    return { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) };
-  })()`);
-  window.focus();
-  contents.sendInputEvent({ type: 'mouseMove', ...position });
-  contents.sendInputEvent({ type: 'mouseDown', ...position, button: 'left', clickCount: 1 });
-  contents.sendInputEvent({ type: 'mouseUp', ...position, button: 'left', clickCount: 1 });
+  console.log('[screen] PASS consent, keyboard/mouse gating, all three quality settings, stop from either end, commands before and after stopping, repeat, and disconnect');
 }
 
 function finish(code, error) {

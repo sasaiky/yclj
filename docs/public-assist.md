@@ -27,7 +27,7 @@ node operator-cli/index.js 123456 --url wss://assist.example.com/assist --run ./
 
 ### 屏幕共享
 
-使用支持屏幕共享的 Windows 客户端和交互式 CLI 配对。两端支持键鼠时，Windows 端按钮显示「共享屏幕并允许控制」，点击一次就同时共享主屏幕和启用远程键鼠。协助端窗口自动打开，可在画面内点击、拖拽、滚动和输入，点击画面后键盘输入发送到 Windows。使用旧版或不支持键鼠的控制端时，Windows 显示「共享屏幕」。点击「停止共享」或断开连接会撤回键鼠权限并释放按下的键和鼠标按钮。停止共享后命令会话继续运行。
+使用支持屏幕共享的 Windows 客户端和交互式 CLI 配对。两端支持键鼠时，Windows 端按钮显示「共享屏幕并允许控制」，点击一次就同时共享主屏幕和启用远程键鼠。协助端窗口自动打开，可在画面内点击、拖拽、滚动和输入，点击画面后键盘输入发送到 Windows。使用旧版或不支持键鼠的控制端时，Windows 显示「共享屏幕」。Windows 端可以点击「停止共享」，两端均支持时也可以在观看窗口点击「停止共享」。停止共享会关闭画面、撤回键鼠权限并释放按下的键和鼠标按钮，命令会话继续运行。
 
 画面由 Electron 采集，沿用 WebRTC 直连或 TURN 中继。新版 Windows 客户端开始共享后，协助端可在画面窗口切换画质。每次开始共享时使用标准档。
 
@@ -37,7 +37,7 @@ node operator-cli/index.js 123456 --url wss://assist.example.com/assist --run ./
 | 标准 | 1280×720 | 15 帧/秒 | 900 kbps |
 | 清晰 | 1920×1080 | 15 帧/秒 | 1.8 Mbps |
 
-视频走媒体轨，键鼠和命令走数据通道。连接拥塞时会丢弃积压的鼠标移动和滚轮事件。遇到拥塞可以切到省流档，Windows 端也可停止共享来释放视频带宽。Windows 键鼠由 [Windows Input Simulator](https://github.com/michaelnoonan/inputsimulator) 注入到当前桌面，受 Windows 原有的权限限制。
+视频走媒体轨，键鼠和命令走数据通道。连接拥塞时会丢弃积压的鼠标移动和滚轮事件。遇到拥塞可以切到省流档，也可以停止共享来释放视频带宽。Windows 键鼠由 [Windows Input Simulator](https://github.com/michaelnoonan/inputsimulator) 注入到当前桌面，受 Windows 原有的权限限制。
 
 配置 CLI 的 `init` 把服务器地址和设备公开 ID 保存到当前用户的 `assist-config.json`，默认使用当前设备的 ID。如果 Windows 和 Mac 都要发起协助，在两台设备分别执行 `device-id`，然后运行 `init` 时在服务器地址后传入英文逗号分隔的两个 ID。配置文件可以复制到打包用的 Windows 电脑。
 

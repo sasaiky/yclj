@@ -9,7 +9,7 @@
     #screen-controls { padding: 8px 14px; text-align: right; background: #202020; }
     #screen-input-status { float: left; padding: 4px 0; }
     #screen-keyboard { position: absolute; width: 1px; height: 1px; padding: 0; opacity: 0; pointer-events: none; }
-    select { margin-left: 6px; padding: 4px; font: inherit; color-scheme: dark; }
+    select, #screen-stop { margin-left: 6px; padding: 4px; font: inherit; color-scheme: dark; }
     video { display: block; flex: 1; width: 100%; min-height: 0; object-fit: contain; }
   </style>
 </head>
@@ -22,6 +22,7 @@
       <option value="standard" selected>标准 · 720p</option>
       <option value="clear">清晰 · 1080p</option>
     </select>
+    <button type="button" id="screen-stop" hidden>停止共享</button>
   </div>
   <textarea id="screen-keyboard" aria-label="远程键盘输入" tabindex="-1" spellcheck="false"></textarea>
   <video id="screen" aria-label="对方共享的屏幕" autoplay playsinline muted></video>

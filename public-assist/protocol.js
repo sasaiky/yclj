@@ -208,7 +208,8 @@ function operationAllowed(message, fromOperator, sessionId) {
   }
   if (!fromOperator) return message.type === 'session' && ['shell_exit', 'screen_started', 'screen_stopped'].includes(message.action);
   if (message.type === 'input') return validScreenInput(message);
-  if (message.type === 'session') return message.action === 'screen_quality' && isScreenQuality(message.quality);
+  if (message.type === 'session') return message.action === 'screen_stop' ||
+    (message.action === 'screen_quality' && isScreenQuality(message.quality));
   if (message.type !== 'ui') return false;
   if (message.action === 'clear') return true;
   if (['status', 'update_status'].includes(message.action)) return typeof message.data === 'string';
