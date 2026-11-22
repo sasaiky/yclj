@@ -1,6 +1,6 @@
 const { ipcRenderer } = require('electron');
 
-ipcRenderer.once('assist:rtc', (event, { operator, iceServers, relayOnly, viewScreen, dataLimit }) => {
+ipcRenderer.once('assist:rtc', (event, { operator, iceServers, relayOnly, viewScreen, screenQualities, dataLimit }) => {
   const [port] = event.ports;
   const report = (event, data) => port.postMessage({ event, data });
   const pc = new RTCPeerConnection({ iceServers, iceTransportPolicy: relayOnly ? 'relay' : 'all' });
@@ -14,12 +14,18 @@ ipcRenderer.once('assist:rtc', (event, { operator, iceServers, relayOnly, viewSc
   let actions = Promise.resolve();
   let screenTransceiver;
   let captureTrack;
+  let sendingQuality;
   let incomingTrack;
   let sharing = false;
+  let viewingQuality;
   const screenVideo = operator && viewScreen ? document.getElementById('screen') : null;
+  const qualitySelect = screenVideo && document.getElementById('screen-quality');
 
   if (screenVideo) {
     screenTransceiver = pc.addTransceiver('video', { direction: 'recvonly' });
+    qualitySelect.addEventListener('change', () => {
+      if (viewingQuality) report('screen_quality', qualitySelect.value);
+    });
     screenVideo.addEventListener('playing', () => { if (sharing) report('screen_visible', true); });
     pc.addEventListener('track', ({ track }) => {
       if (track.kind !== 'video') return;
@@ -28,8 +34,12 @@ ipcRenderer.once('assist:rtc', (event, { operator, iceServers, relayOnly, viewSc
     });
   }
 
-  function updateScreen(active) {
-    if (!screenVideo || sharing === active) return;
+  function updateScreen(active, quality) {
+    if (!screenVideo) return;
+    viewingQuality = active && quality;
+    document.getElementById('screen-controls').hidden = !viewingQuality;
+    if (viewingQuality) qualitySelect.value = viewingQuality;
+    if (sharing === active) return;
     sharing = active;
     screenVideo.srcObject = active && incomingTrack ? new MediaStream([incomingTrack]) : null;
     if (!active) report('screen_visible', false);
@@ -39,9 +49,37 @@ ipcRenderer.once('assist:rtc', (event, { operator, iceServers, relayOnly, viewSc
     if (!captureTrack) return;
     captureTrack.stop();
     captureTrack = null;
+    sendingQuality = null;
     report('screen_capture', { active: false });
     try { await screenTransceiver.sender.replaceTrack(null); } catch {
       // The track is already stopped if ICE or the PeerConnection has closed.
+    }
+  }
+
+  async function configureScreen(track, quality) {
+    const profile = screenQualities[quality];
+    const sender = screenTransceiver.sender;
+    const parameters = sender.getParameters();
+    const { width = screenQualities.clear.width, height = screenQualities.clear.height } = track.getSettings();
+    Object.assign(parameters.encodings[0], {
+      maxBitrate: profile.bitrate,
+      maxFramerate: profile.fps,
+      scaleResolutionDownBy: Math.max(1, width / profile.width, height / profile.height)
+    });
+    parameters.degradationPreference = 'maintain-resolution';
+    await sender.setParameters(parameters);
+  }
+
+  async function changeScreenQuality(quality) {
+    const track = captureTrack;
+    if (!track || !sendingQuality || !Object.hasOwn(screenQualities, quality)) return;
+    try {
+      await configureScreen(track, quality);
+      if (captureTrack !== track) return;
+      sendingQuality = quality;
+      report('screen_capture', { active: true, quality });
+    } catch {
+      if (captureTrack === track) report('screen_capture', { active: true, quality: sendingQuality, error: '无法切换画质' });
     }
   }
 
@@ -52,25 +90,27 @@ ipcRenderer.once('assist:rtc', (event, { operator, iceServers, relayOnly, viewSc
       return;
     }
     try {
-      const sender = screenTransceiver.sender;
-      const parameters = sender.getParameters();
-      parameters.encodings[0].maxBitrate = 700_000;
-      parameters.degradationPreference = 'maintain-resolution';
-      await sender.setParameters(parameters);
+      const { width, height, fps } = screenQualities.clear;
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId,
-          maxWidth: 1280, maxHeight: 720, maxFrameRate: 15 } }
+          maxWidth: width, maxHeight: height, maxFrameRate: fps } }
       });
       const [track] = stream.getVideoTracks();
       captureTrack = track;
       track.contentHint = 'detail';
       track.addEventListener('ended', () => { if (captureTrack === track) void stopScreen(); });
-      await sender.replaceTrack(track);
-      if (captureTrack === track) report('screen_capture', { active: true });
+      await configureScreen(track, 'standard');
+      if (captureTrack !== track) return;
+      await screenTransceiver.sender.replaceTrack(track);
+      if (captureTrack === track) {
+        sendingQuality = 'standard';
+        report('screen_capture', { active: true, quality: sendingQuality });
+      }
     } catch {
       captureTrack?.stop();
       captureTrack = null;
+      sendingQuality = null;
       report('screen_capture', { active: false, error: '无法共享屏幕' });
     }
   }
@@ -167,7 +207,12 @@ ipcRenderer.once('assist:rtc', (event, { operator, iceServers, relayOnly, viewSc
   port.onmessage = ({ data: message }) => {
     if (message.op === 'screen_start') return void startScreen(message.sourceId);
     if (message.op === 'screen_stop') return void stopScreen();
-    if (message.op === 'screen_state') return updateScreen(message.active);
+    if (message.op === 'screen_state') return updateScreen(message.active, message.quality);
+    if (message.op === 'screen_quality') return queue(() => changeScreenQuality(message.quality));
+    if (message.op === 'screen_quality_failed' && viewingQuality) {
+      qualitySelect.value = viewingQuality;
+      return;
+    }
     if (message.op === 'data') {
       if (channel?.readyState !== 'open' || channel.bufferedAmount > dataLimit * 32) return report('fatal');
       try { channel.send(message.body); } catch { report('fatal'); }

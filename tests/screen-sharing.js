@@ -72,17 +72,18 @@ async function main() {
   const inViewer = code => viewer.webContents.executeJavaScript(code);
   await inCapture(`const setParameters = RTCRtpSender.prototype.setParameters;
   RTCRtpSender.prototype.setParameters = function (params) {
-    globalThis.testVideoBitrate = params.encodings[0].maxBitrate;
+    globalThis.testVideoEncoding = params.encodings[0];
     return setParameters.call(this, params);
   };
   navigator.mediaDevices.getUserMedia = async ({ audio, video }) => {
     if (audio !== false || video.mandatory.chromeMediaSourceId !== 'screen:test') throw new Error('Unexpected capture');
     const canvas = document.createElement('canvas');
-    canvas.width = 320;
-    canvas.height = 180;
+    canvas.width = video.mandatory.maxWidth;
+    canvas.height = video.mandatory.maxHeight;
     const context = canvas.getContext('2d');
+    let frame = 0;
     const paint = () => {
-      context.fillStyle = '#336699';
+      context.fillStyle = ++frame % 2 ? '#336699' : '#346998';
       context.fillRect(0, 0, canvas.width, canvas.height);
     };
     paint();
@@ -107,8 +108,28 @@ async function main() {
     await click(windowsClient);
     await waitFor(async () => (await clientState()).screenSharing, 'local share started');
     await waitFor(() => viewer.isVisible(), 'viewer opened');
-    assert.equal(await inViewer('document.querySelector("video").videoWidth'), 320);
-    assert.equal(await inCapture('globalThis.testVideoBitrate'), 700_000);
+    assert.equal(await inViewer('document.querySelector("video").videoHeight'), 720);
+    assert.equal(await inCapture('globalThis.testVideoEncoding.maxBitrate'), 900_000);
+    assert.equal(await inViewer('document.querySelector("#screen-controls").hidden'), false);
+
+    if (index === 0) {
+      for (const [quality, height, bitrate, fps] of [
+        ['clear', 1080, 1_800_000, 15],
+        ['economy', 540, 350_000, 8],
+        ['standard', 720, 900_000, 15]
+      ]) {
+        await inViewer(`(() => {
+          const select = document.querySelector('#screen-quality');
+          select.value = ${JSON.stringify(quality)};
+          select.dispatchEvent(new Event('change'));
+        })()`);
+        await waitFor(async () => await inViewer('document.querySelector("video").videoHeight') === height, 'video resized to ' + height);
+        const encoding = await inCapture('globalThis.testVideoEncoding');
+        assert.equal(encoding.maxBitrate, bitrate);
+        assert.equal(encoding.maxFramerate, fps);
+        assert.equal(captureSelections, 1, 'changing quality must reuse the selected screen');
+      }
+    }
 
     const marker = 'YCLJ-VIDEO-CONTROL-' + index;
     const command = process.platform === 'win32' ? 'echo ' + marker : marker;
@@ -127,7 +148,7 @@ async function main() {
   assert.equal(captureSelections, 3);
   await evaluate('window.ycljClient.disconnect()');
   await waitFor(() => viewer.isDestroyed() && capture.isDestroyed(), 'RTC windows closed');
-  console.log('[screen] PASS user consent, bitrate cap, commands during video, stop, repeat, and disconnect while sharing');
+  console.log('[screen] PASS consent, all three quality settings, commands during video, stop, repeat, and disconnect');
 }
 
 function finish(code, error) {

@@ -19,6 +19,10 @@ assert.equal(operationAllowed(command, true, session), true);
 assert.equal(operationAllowed(command, false, session), false);
 assert.equal(operationAllowed({ ...command, stream: 'stdout' }, false, session), true);
 assert.equal(operationAllowed(command, true, 'other-session'), false);
+const screenQuality = { type: 'session', action: 'screen_quality', quality: 'clear', session_id: session };
+assert.equal(operationAllowed(screenQuality, true, session), true);
+assert.equal(operationAllowed(screenQuality, false, session), false);
+assert.equal(operationAllowed({ ...screenQuality, quality: '__proto__' }, true, session), false);
 
 async function verifyLanAddresses() {
   for (const host of ['127.0.0.1', '192.168.1.4', '100.64.0.5', '[fd7a::1]', '[::ffff:7f00:1]']) {

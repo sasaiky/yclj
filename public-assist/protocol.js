@@ -177,12 +177,23 @@ function verifySignal(message, invite) {
   }
 }
 
+const screenQualities = {
+  economy: { width: 960, height: 540, fps: 8, bitrate: 350_000 },
+  standard: { width: 1280, height: 720, fps: 15, bitrate: 900_000 },
+  clear: { width: 1920, height: 1080, fps: 15, bitrate: 1_800_000 }
+};
+
+function isScreenQuality(value) {
+  return typeof value === 'string' && Object.hasOwn(screenQualities, value);
+}
+
 function operationAllowed(message, fromOperator, sessionId) {
   if (message?.session_id !== sessionId) return false;
   if (message.type === 'exec') {
     return typeof message.payload === 'string' && (fromOperator ? message.stream === 'stdin' : ['stdout', 'stderr'].includes(message.stream));
   }
   if (!fromOperator) return message.type === 'session' && ['shell_exit', 'screen_started', 'screen_stopped'].includes(message.action);
+  if (message.type === 'session') return message.action === 'screen_quality' && isScreenQuality(message.quality);
   if (message.type !== 'ui') return false;
   if (message.action === 'clear') return true;
   if (['status', 'update_status'].includes(message.action)) return typeof message.data === 'string';
@@ -191,4 +202,4 @@ function operationAllowed(message, fromOperator, sessionId) {
 
 module.exports = { INVITE_TTL, SIGNAL_LIMIT, DATA_LIMIT, idPattern, pinPattern,
   getIdentity, readIdentity, signalUrl, isPublicAddress, lanRelayOptions, createInvite, createPinOffer, makeExchangeKey, readExchangeKey, pinSecret,
-  readInvite, inviteRoute, signSignal, verifySignal, operationAllowed };
+  readInvite, inviteRoute, signSignal, verifySignal, operationAllowed, screenQualities, isScreenQuality };
