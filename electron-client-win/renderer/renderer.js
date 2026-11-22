@@ -160,7 +160,8 @@ function applyState(next) {
   const shareButton = refs['btn-share-screen'];
   shareButton.hidden = !next.screenShareAvailable;
   shareButton.disabled = Boolean(next.screenShareBusy);
-  shareButton.textContent = next.screenSharing ? '停止共享' : '共享屏幕';
+  shareButton.textContent = next.screenSharing ? '停止共享' : next.screenInputAvailable ? '共享屏幕并允许控制' : '共享屏幕';
+  shareButton.title = next.screenInputAvailable ? '共享主屏幕并允许当前协助人使用键盘和鼠标' : '将主屏幕共享给当前协助人';
   shareButton.setAttribute('aria-pressed', String(Boolean(next.screenSharing)));
   refs['relay-address'].hidden = !next.addressEditable;
   if (!addressInitialized && next.relayUrl) {

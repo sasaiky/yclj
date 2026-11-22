@@ -187,12 +187,27 @@ function isScreenQuality(value) {
   return typeof value === 'string' && Object.hasOwn(screenQualities, value);
 }
 
+function validScreenInput(input) {
+  if (!input || typeof input !== 'object') return false;
+  const position = () => [input.x, input.y].every(value => Number.isFinite(value) && value >= 0 && value <= 1);
+  switch (input.action) {
+    case 'move': return position();
+    case 'button': return position() && [0, 2].includes(input.button) && typeof input.down === 'boolean';
+    case 'wheel': return position() && [input.dx, input.dy].every(value => Number.isInteger(value) && Math.abs(value) <= 1200);
+    case 'key': return typeof input.code === 'string' && /^[A-Za-z0-9]{1,24}$/.test(input.code) && typeof input.down === 'boolean';
+    case 'text': return typeof input.text === 'string' && input.text.length <= 512;
+    case 'release': return true;
+    default: return false;
+  }
+}
+
 function operationAllowed(message, fromOperator, sessionId) {
   if (message?.session_id !== sessionId) return false;
   if (message.type === 'exec') {
     return typeof message.payload === 'string' && (fromOperator ? message.stream === 'stdin' : ['stdout', 'stderr'].includes(message.stream));
   }
   if (!fromOperator) return message.type === 'session' && ['shell_exit', 'screen_started', 'screen_stopped'].includes(message.action);
+  if (message.type === 'input') return validScreenInput(message);
   if (message.type === 'session') return message.action === 'screen_quality' && isScreenQuality(message.quality);
   if (message.type !== 'ui') return false;
   if (message.action === 'clear') return true;

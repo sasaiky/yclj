@@ -2,7 +2,15 @@
 
 已有协助服务器时，在控制端保存地址，在 Windows 上生成被控端，然后交换六位码。自建服务器的人多做一次 Linux 部署。局域网使用原来的本地中继，无需云服务器。
 
-## 1. 下载源码并准备控制端
+## 1. 准备控制端
+
+有控制端压缩包时，解压整个文件夹，双击 Windows 的 `YCLJ.cmd` 或 Mac 的 `YCLJ.command`，输入对方显示的六位验证码。两种启动器均支持 `--help`、`--relay-only` 和 `--run`。Windows 观看窗口使用 Microsoft Edge WebView2 Runtime，Mac 使用系统 WebKit。压缩包自带 Node.js。 [微软 WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/)
+
+同一台电脑上的控制身份和服务器地址会继续使用。换电脑时，先在解压目录运行对应的 `.\YCLJ.cmd config import-device "迁移文件的完整路径"` 或 `./YCLJ.command config import-device "迁移文件的完整路径"`。首次配置也可以用启动器的 `config init` 或 `config init-lan`。
+
+开发者可在 Windows x64、Apple Silicon Mac 或 Intel Mac 上运行 `npm run operator:dist`，生成当前系统和架构的控制端压缩包。Mac 构建需要 Xcode Command Line Tools，Windows 构建使用 .NET Framework 的 C# 编译器。输出目录为 `release-operator/`。
+
+### 从源码运行
 
 从项目的 GitHub 页面选择 **Code → Download ZIP** 并解压，也可以用页面上的 HTTPS 地址执行 `git clone`。从其他可信渠道取得源码压缩包也可以。在包含 `package.json` 的目录打开终端。 [GitHub 下载源码说明](https://docs.github.com/en/repositories/working-with-files/using-files/downloading-source-code-archives)
 
@@ -13,7 +21,7 @@ npm ci
 node tools/assist-config.js
 ```
 
-配置 CLI 会列出命令。日常 CLI 没有地址时会提示导入旧设备的配置文件，或者新建公网、局域网配置。它只在需要建立公网连接时启动 Electron 的 WebRTC 组件。Windows 安装包在 Windows 上构建。
+配置 CLI 会列出命令。日常 CLI 没有地址时会提示导入旧设备的配置文件，或者新建公网、局域网配置。公网会话使用 WebRTC。从源码启动时，Mac 的交互式公网会话优先使用系统 WebKit，首次启动需要 Xcode Command Line Tools。源码模式的 `--run` 和 Windows 观看窗口使用 Electron。被控端的 Windows 安装包在 Windows 上构建。
 
 ## 2. 公网协助
 

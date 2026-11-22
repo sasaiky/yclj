@@ -25,7 +25,8 @@ const messages = {
   signal_unavailable: '协助服务器连接已断开'
 };
 
-function connectPeer({ identity, invite, pin, url, operator, trustedOperators, relayOnly = false, viewScreen = false, operatorPassword }) {
+function connectPeer({ identity, invite, pin, url, operator, trustedOperators, relayOnly = false, viewScreen = false, screenInput = false,
+  operatorPassword, rtcFactory = openRtc }) {
   if (!invite) invite = { url: signalUrl(url), pin, route: randomBytes(32).toString('base64url') };
   const pinMode = Boolean(invite.pin);
   let exchange = pinMode ? makeExchangeKey() : null;
@@ -41,6 +42,9 @@ function connectPeer({ identity, invite, pin, url, operator, trustedOperators, r
   let rtc;
   let screenAvailable = false;
   let screenQualitySupported = false;
+  let inputCompatible = false;
+  let inputActive = false;
+  let sharingRequested = false;
   let recovering = false;
   const expectsPasswordCheck = typeof operatorPassword === 'string';
 
@@ -49,6 +53,7 @@ function connectPeer({ identity, invite, pin, url, operator, trustedOperators, r
     phase = 'closed';
     clearTimeout(timer);
     clearTimeout(heartbeat);
+    if (inputActive && !operator) peer.emit('input-release');
     rtc?.close();
     if (socket.readyState === WebSocket.CONNECTING) socket.terminate();
     if (socket.readyState === WebSocket.OPEN) socket.close(1000);
@@ -83,6 +88,7 @@ function connectPeer({ identity, invite, pin, url, operator, trustedOperators, r
     if (phase === 'closed') return;
     if (event === 'signal') return signal(data.op, data.body);
     if (event === 'open' && phase === 'approved') {
+      inputCompatible = data?.screenInput === true;
       phase = 'ready';
       clearTimeout(timer);
       peer.emit('ready', session);
@@ -93,7 +99,12 @@ function connectPeer({ identity, invite, pin, url, operator, trustedOperators, r
       if (operator && message.type === 'session' && ['screen_started', 'screen_stopped'].includes(message.action)) {
         const active = message.action === 'screen_started';
         screenQualitySupported = active && isScreenQuality(message.quality);
-        if (viewScreen) rtc.send({ op: 'screen_state', active, quality: screenQualitySupported ? message.quality : null });
+        inputActive = active && inputCompatible && message.screenInput === true;
+        if (viewScreen) rtc.send({ op: 'screen_state', active, quality: screenQualitySupported ? message.quality : null, input: inputActive });
+        return;
+      }
+      if (message.type === 'input') {
+        if (!operator && inputActive && !recovering) peer.emit('input', message);
         return;
       }
       if (!operator && message.type === 'session' && message.action === 'screen_quality') {
@@ -101,6 +112,8 @@ function connectPeer({ identity, invite, pin, url, operator, trustedOperators, r
         return;
       }
       peer.emit('message', message);
+    } else if (event === 'screen_input' && operator && inputActive) {
+      peer.send({ ...data, type: 'input', session_id: session });
     } else if (event === 'screen_quality' && operator && viewScreen && screenQualitySupported) {
       if (!peer.send({ type: 'session', action: 'screen_quality', quality: data, session_id: session })) {
         rtc.send({ op: 'screen_quality_failed' });
@@ -109,13 +122,17 @@ function connectPeer({ identity, invite, pin, url, operator, trustedOperators, r
       screenAvailable = data === true;
       peer.emit('screen');
     } else if (event === 'screen_capture' && phase === 'ready' && !operator) {
+      const input = data.active && sharingRequested && screenInput && inputCompatible;
+      if (inputActive && !input) peer.emit('input-release');
+      inputActive = input;
       peer.send({ type: 'session', action: data.active ? 'screen_started' : 'screen_stopped',
-        quality: data.quality, session_id: session });
+        quality: data.quality, screenInput: inputActive, session_id: session });
       peer.emit('screen', data);
     } else if (event === 'route' && phase === 'ready') {
       peer.emit('route', data);
     } else if (event === 'recovering' && phase === 'ready' && !recovering) {
       recovering = true;
+      if (inputActive && !operator) peer.emit('input-release');
       deadline(20_000, 'rtc_failed');
       peer.emit('route', 'recovering');
     } else if (event === 'recovered' && recovering) {
@@ -179,7 +196,7 @@ function connectPeer({ identity, invite, pin, url, operator, trustedOperators, r
         return;
       }
       if (phase === 'approved' && !rtc && message?.op === 'ice' && Array.isArray(message.servers)) {
-        rtc = openRtc({ operator, iceServers: message.servers, relayOnly, viewScreen, screenQualities, dataLimit: DATA_LIMIT }, onRtc);
+        rtc = rtcFactory({ operator, iceServers: message.servers, relayOnly, viewScreen, screenQualities, dataLimit: DATA_LIMIT }, onRtc);
         return;
       }
       if (rtc && ['approved', 'ready'].includes(phase) && message?.op === 'ice_update' && Array.isArray(message.servers)) {
@@ -229,12 +246,18 @@ function connectPeer({ identity, invite, pin, url, operator, trustedOperators, r
     if (phase !== 'ready' || (operator && recovering) || !operationAllowed(message, operator, session)) return false;
     const body = JSON.stringify(message);
     if (Buffer.byteLength(body) > DATA_LIMIT) return false;
-    rtc.send({ op: 'data', body });
+    rtc.send({ op: 'data', body, volatile: message.type === 'input' && ['move', 'wheel'].includes(message.action) });
     return true;
   };
   peer.canShareScreen = () => !operator && phase === 'ready' && screenAvailable;
+  peer.canShareInput = () => peer.canShareScreen() && screenInput && inputCompatible;
   peer.shareScreen = sourceId => {
     if (!peer.canShareScreen()) return false;
+    sharingRequested = Boolean(sourceId);
+    if (!sharingRequested && inputActive) {
+      inputActive = false;
+      peer.emit('input-release');
+    }
     rtc.send(sourceId ? { op: 'screen_start', sourceId } : { op: 'screen_stop' });
     return true;
   };

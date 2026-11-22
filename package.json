@@ -13,6 +13,7 @@
     "scripts": {
         "relay": "node relay/index.js",
         "operator": "node operator-cli/index.js",
+        "operator:dist": "node tools/build-operator.js",
         "client": "node client-cli/index.js",
         "assist:server": "node public-assist/server.js",
         "assist:config": "node tools/assist-config.js",
@@ -20,7 +21,7 @@
         "smoke": "node tests/smoke.js",
         "pack:client:linux": "pkg client-cli/index.js --targets node18-linux-x64 --output dist/yclj-client",
         "win-client:start": "electron electron-client-win/main.js",
-        "win-client:check": "node --check electron-client-win/main.js && node --check electron-client-win/preload.js && node --check electron-client-win/renderer/renderer.js && node --check electron-client-win/terminal-display.js && node --check electron-client-win/session-log.js",
+        "win-client:check": "node --check electron-client-win/main.js && node --check electron-client-win/preload.js && node --check electron-client-win/renderer/renderer.js && node --check electron-client-win/terminal-display.js && node --check electron-client-win/session-log.js && node --check electron-client-win/remote-input.js",
         "win-client:pin-test": "electron tests/pin-refresh.js",
         "win-client:dist": "electron-builder --win --x64 --projectDir .",
         "win-host:start": "electron electron-host-win/main.js",
@@ -71,7 +72,8 @@
             "!README.md"
         ],
         "asarUnpack": [
-            "node_modules/node-pty/**"
+            "node_modules/node-pty/**",
+            "electron-client-win/input/**"
         ],
         "win": {
             "executableName": "远程帮助客户端",

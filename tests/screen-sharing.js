@@ -9,6 +9,12 @@ const { getIdentity } = require('../public-assist/protocol');
 const { createServer } = require('../public-assist/server');
 const { connectPeer } = require('../public-assist/peer');
 const { terminalText } = require('../operator-cli/terminal-text');
+const inputEvents = [];
+let inputReleases = 0;
+require('../electron-client-win/remote-input').createRemoteInput = () => ({
+  apply: event => inputEvents.push(event),
+  release: () => { inputReleases++; }
+});
 
 const base = fs.mkdtempSync(path.join(os.tmpdir(), 'yclj-screen-test-'));
 const operator = getIdentity(path.join(base, 'operator'));
@@ -98,6 +104,12 @@ async function main() {
 
   assert.equal(viewer.isVisible(), false);
   assert.equal(await inViewer('document.querySelector("video").srcObject === null'), true);
+  const { sessionId } = await clientState();
+  const textInput = { type: 'input', action: 'text', text: '共享输入', session_id: sessionId };
+  assert(peer.send(textInput));
+  await delay(100);
+  assert.equal(inputEvents.length, 0, 'input requires local sharing');
+  assert.equal(await evaluate('document.querySelector("#btn-share-screen").textContent'), '共享屏幕并允许控制');
   await evaluate('document.querySelector("#btn-share-screen").click()');
   assert.equal(captureSelections, 0, 'programmatic click must not capture');
   let commandOutput = '';
@@ -113,6 +125,11 @@ async function main() {
     assert.equal(await inViewer('document.querySelector("#screen-controls").hidden'), false);
 
     if (index === 0) {
+      assert.equal(await inViewer('document.querySelector("#screen-input-status").hidden'), false);
+      await clickViewer(viewer);
+      await waitFor(() => inputEvents.some(event => event.action === 'button' && event.down === false), 'viewer click forwarded');
+      assert(peer.send(textInput));
+      await waitFor(() => inputEvents.some(event => event.text === textInput.text), 'shared keyboard input forwarded');
       for (const [quality, height, bitrate, fps] of [
         ['clear', 1080, 1_800_000, 15],
         ['economy', 540, 350_000, 8],
@@ -133,22 +150,39 @@ async function main() {
 
     const marker = 'YCLJ-VIDEO-CONTROL-' + index;
     const command = process.platform === 'win32' ? 'echo ' + marker : marker;
-    const { sessionId } = await clientState();
     assert(peer.send({ type: 'exec', stream: 'stdin', payload: command + '\r\n', session_id: sessionId }));
     await waitFor(() => terminalText(commandOutput).split('\n').some(line => line.trim() === marker),
       'command output during video');
 
+    const releasesBeforeStop = inputReleases;
     await click(windowsClient);
     await waitFor(async () => !(await clientState()).screenSharing && !viewer.isVisible(), 'share stopped');
     assert.equal(await inViewer('document.querySelector("video").srcObject === null'), true);
     assert.equal(await inCapture('globalThis.testTrack.readyState'), 'ended');
+    assert(inputReleases > releasesBeforeStop, 'stopping share releases input');
+    const count = inputEvents.length;
+    assert(peer.send(textInput));
+    await delay(100);
+    assert.equal(inputEvents.length, count, 'input stops with sharing');
   }
   await click(windowsClient);
   await waitFor(() => viewer.isVisible(), 'viewer reopened before disconnect');
   assert.equal(captureSelections, 3);
   await evaluate('window.ycljClient.disconnect()');
   await waitFor(() => viewer.isDestroyed() && capture.isDestroyed(), 'RTC windows closed');
-  console.log('[screen] PASS consent, all three quality settings, commands during video, stop, repeat, and disconnect');
+  console.log('[screen] PASS consent, keyboard/mouse gating, all three quality settings, commands during video, stop, repeat, and disconnect');
+}
+
+async function clickViewer(window) {
+  const contents = window.webContents;
+  const position = await contents.executeJavaScript(`(() => {
+    const box = document.querySelector('video').getBoundingClientRect();
+    return { x: Math.round(box.x + box.width / 2), y: Math.round(box.y + box.height / 2) };
+  })()`);
+  window.focus();
+  contents.sendInputEvent({ type: 'mouseMove', ...position });
+  contents.sendInputEvent({ type: 'mouseDown', ...position, button: 'left', clickCount: 1 });
+  contents.sendInputEvent({ type: 'mouseUp', ...position, button: 'left', clickCount: 1 });
 }
 
 function finish(code, error) {

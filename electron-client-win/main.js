@@ -6,6 +6,7 @@ const { stripVTControlCharacters } = require('node:util');
 const WebSocket = require('ws');
 const { createTerminalDisplay } = require('./terminal-display');
 const { openSessionLog } = require('./session-log');
+const { createRemoteInput } = require('./remote-input');
 const { getIdentity, createPinOffer, signalUrl, isPublicAddress, lanRelayOptions, idPattern } = require('../public-assist/protocol');
 const { connectPeer } = require('../public-assist/peer');
 
@@ -52,6 +53,8 @@ let ptyProc = null;
 let rawProc = null;
 let sessionLog = null;
 let logNoticeId = 0;
+let remoteInput;
+let sharedDisplay;
 const terminalDisplay = createTerminalDisplay(recordTerminal);
 
 function pinConsumed() {
@@ -72,6 +75,7 @@ function getStateSnapshot() {
     peerIp: state.peerIp,
     sessionId: state.sessionId,
     screenShareAvailable: Boolean(assist?.canShareScreen()),
+    screenInputAvailable: Boolean(assist?.canShareInput()),
     screenSharing: state.screenSharing,
     screenShareBusy: state.screenShareBusy,
     terminalMode: state.terminalMode,
@@ -428,6 +432,8 @@ function handleRelayMessage(raw) {
 }
 
 function disconnectRelay(reason) {
+  remoteInput?.release();
+  sharedDisplay = undefined;
   if (assist) {
     const peer = assist;
     assist = null;
@@ -521,7 +527,13 @@ function startPublic(relayUrl, shell, closeReason = 'reconnect') {
   if (['invite_expired', 'pin_conflict'].includes(closeReason)) state.assistStatus = '正在生成新验证码…';
   updateConnection('connecting');
 
-  const peer = connectPeer({ identity, invite, operator: false, trustedOperators });
+  remoteInput ||= createRemoteInput(() => {
+    if (assist && state.screenSharing) {
+      appendLog('error', '远程键鼠输入失败，共享已停止');
+      assist.shareScreen();
+    }
+  });
+  const peer = connectPeer({ identity, invite, operator: false, trustedOperators, screenInput: Boolean(remoteInput) });
   assist = peer;
   peer.on('invitation', pin => {
     state.pin = pin;
@@ -549,8 +561,21 @@ function startPublic(relayUrl, shell, closeReason = 'reconnect') {
       state.screenSharing = result.active;
       state.screenShareBusy = false;
       state.assistStatus = result.error || '';
+      if (!result.active) sharedDisplay = undefined;
     }
     emitState();
+  });
+  peer.on('input-release', () => remoteInput?.release());
+  peer.on('input', input => {
+    if (assist !== peer || !state.screenSharing || state.screenShareBusy) return;
+    if (screen.getPrimaryDisplay().id !== sharedDisplay) {
+      peer.shareScreen();
+      return;
+    }
+    try { remoteInput.apply(input); } catch {
+      remoteInput.release();
+      peer.shareScreen();
+    }
   });
   peer.on('message', message => {
     if (assist !== peer || message.session_id !== state.sessionId) return;
@@ -632,10 +657,14 @@ app.whenReady().then(() => {
     try {
       let sourceId;
       if (!state.screenSharing) {
-        const primaryId = String(screen.getPrimaryDisplay().id);
+        const display = screen.getPrimaryDisplay().id;
+        const primaryId = String(display);
         const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 0, height: 0 } });
         const primary = sources.find(source => source.display_id === primaryId) || (sources.length === 1 ? sources[0] : null);
         if (!primary) throw new Error('找不到主屏幕');
+        if (assist !== peer) return getStateSnapshot();
+        if (screen.getPrimaryDisplay().id !== display) throw new Error('主屏幕已更换，请重新共享');
+        sharedDisplay = display;
         sourceId = primary.id;
       }
       if (assist === peer && !peer.shareScreen(sourceId)) throw new Error('屏幕共享不可用');

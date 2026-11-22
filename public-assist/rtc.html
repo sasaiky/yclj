@@ -7,19 +7,23 @@
   <style>
     body { margin: 0; height: 100vh; display: flex; flex-direction: column; background: #111; color: #f4f4f4; font: 14px system-ui, sans-serif; }
     #screen-controls { padding: 8px 14px; text-align: right; background: #202020; }
+    #screen-input-status { float: left; padding: 4px 0; }
+    #screen-keyboard { position: absolute; width: 1px; height: 1px; padding: 0; opacity: 0; pointer-events: none; }
     select { margin-left: 6px; padding: 4px; font: inherit; color-scheme: dark; }
     video { display: block; flex: 1; width: 100%; min-height: 0; object-fit: contain; }
   </style>
 </head>
 <body>
   <div id="screen-controls" hidden>
-    <label for="screen-quality">画质</label>
+    <span id="screen-input-status" hidden>键鼠已开启</span>
+    <label id="screen-quality-label" for="screen-quality">画质</label>
     <select id="screen-quality">
       <option value="economy">省流 · 540p</option>
       <option value="standard" selected>标准 · 720p</option>
       <option value="clear">清晰 · 1080p</option>
     </select>
   </div>
+  <textarea id="screen-keyboard" aria-label="远程键盘输入" tabindex="-1" spellcheck="false"></textarea>
   <video id="screen" aria-label="对方共享的屏幕" autoplay playsinline muted></video>
 </body>
 </html>

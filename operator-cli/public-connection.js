@@ -8,13 +8,20 @@ const { readInvite, signalUrl } = require('../public-assist/protocol');
 const { deviceDirectory } = require('./settings');
 
 function openPublic(config, relayOnly) {
-  if (config.pin) signalUrl(config.url);
-  else readInvite(config.invitation);
-  const electron = require('electron');
+  const address = config.pin ? signalUrl(config.url) : readInvite(config.invitation).url;
+  const bundledViewer = path.join(__dirname, '..', 'viewer', process.platform === 'win32'
+    ? 'YCLJViewer.exe' : 'YCLJ Viewer.app/Contents/MacOS/YCLJViewer');
+  let nativeViewer = fs.existsSync(bundledViewer) ? bundledViewer : undefined;
+  if (!nativeViewer && process.platform === 'darwin' && config.viewScreen && address.startsWith('wss:') && process.env.YCLJ_MAC_RTC !== 'electron') {
+    try { nativeViewer = require('../public-assist/rtc-webkit').buildWebKit(); } catch (error) {
+      console.error(`[operator] WebKit 启动前准备失败，使用 Electron (${error.message})`);
+    }
+  }
+  const executable = nativeViewer ? process.execPath : require('electron');
   const profile = fs.mkdtempSync(path.resolve(os.tmpdir(), 'yclj-operator-'));
   const env = { ...process.env };
-  delete env.ELECTRON_RUN_AS_NODE;
-  const child = spawn(electron, [path.join(__dirname, '..', 'public-assist', 'operator-sidecar.js')], {
+  if (!nativeViewer) delete env.ELECTRON_RUN_AS_NODE;
+  const child = spawn(executable, [path.join(__dirname, '..', 'public-assist', 'operator-sidecar.js')], {
     env, stdio: ['ignore', 'ignore', 'pipe', 'ipc'], windowsHide: true
   });
   child.stderr.resume();
@@ -26,7 +33,7 @@ function openPublic(config, relayOnly) {
 
   child.on('spawn', () => {
     if (manual) return child.kill();
-    child.send({ ...config, relayOnly, deviceDirectory, profile }, error => {
+    child.send({ ...config, relayOnly, deviceDirectory, profile, nativeViewer }, error => {
       if (error && !manual) transport.emit('error', error);
     });
     config.operatorPassword = undefined;

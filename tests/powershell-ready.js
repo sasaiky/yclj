@@ -28,7 +28,7 @@ test('declines the publisher prompt and confirms PowerShell with a fresh marker'
     await Promise.resolve();
     assert.equal(finished, false);
 
-    stdout(handle, 'YCLJ-READY-');
+    stdout(handle, '\x1b[6;106H\x1b[?25h\x1b[7;1HYCLJ-READY-');
     stdout(handle, token + '\r\n');
     assert.equal(await ready, undefined);
   } finally {

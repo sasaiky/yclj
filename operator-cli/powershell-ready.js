@@ -24,7 +24,9 @@ function waitForPowerShell(send, timeout = READY_TIMEOUT) {
     if (!settle || message.type !== 'exec' || message.stream !== 'stdout' || typeof message.payload !== 'string') return;
     tail = (tail + message.payload).slice(-4096);
     const text = terminalText(tail);
-    if (marker && text.split('\n').slice(0, -1).some(line => line.trim() === marker)) {
+    // ConPTY can position the output with a cursor escape instead of a newline.
+    // The echoed probe keeps the prefix and random token in separate strings.
+    if (marker && text.includes(marker)) {
       stop();
       return;
     }

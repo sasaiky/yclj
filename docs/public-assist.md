@@ -4,7 +4,9 @@ Windows 被控端和 CLI 自动连到相同的 `wss://.../assist` 地址进行�
 
 ## 使用
 
-在 Windows 或 macOS 上用 Node.js 22.12 或以上版本安装项目依赖，生成当前控制设备的公开 ID。CLI 会临时启动 Electron 来建立 WebRTC 连接，适合在已登录桌面的系统上运行。
+控制端便携包自带 Node.js，Mac 用系统 WebKit，Windows 用 Microsoft Edge WebView2 Runtime。两版都支持交互式公网协助和 `--run` 脚本模式。 [控制端使用步骤](quick-start.md#1-准备控制端)
+
+从源码运行时，在 Windows 或 macOS 上用 Node.js 22.12 或以上版本安装项目依赖并生成当前控制设备的公开 ID。已登录的 Mac 桌面上，支持观看画面的交互式公网 `wss://` 会话优先使用系统 WebKit，首次使用由 Xcode Command Line Tools 编译并缓存观看程序。源码模式的 Windows 控制端、`--run`、Mac 上的本机 `ws://` 测试和无法编译 WebKit 的 Mac 使用 Electron。Mac 源码模式可设置 `YCLJ_MAC_RTC=electron` 使用兼容引擎。
 
 ```powershell
 npm ci
@@ -25,7 +27,7 @@ node operator-cli/index.js 123456 --url wss://assist.example.com/assist --run ./
 
 ### 屏幕共享
 
-使用支持屏幕共享的 Windows 客户端和交互式 CLI 配对。Windows 端点击「共享屏幕」后，协助端自动打开窗口显示 Windows 主屏幕。Windows 端可随时点击「停止共享」，命令会话继续运行。断开会话会结束采集并关闭画面。
+使用支持屏幕共享的 Windows 客户端和交互式 CLI 配对。两端支持键鼠时，Windows 端按钮显示「共享屏幕并允许控制」，点击一次就同时共享主屏幕和启用远程键鼠。协助端窗口自动打开，可在画面内点击、拖拽、滚动和输入，点击画面后键盘输入发送到 Windows。使用旧版或不支持键鼠的控制端时，Windows 显示「共享屏幕」。点击「停止共享」或断开连接会撤回键鼠权限并释放按下的键和鼠标按钮。停止共享后命令会话继续运行。
 
 画面由 Electron 采集，沿用 WebRTC 直连或 TURN 中继。新版 Windows 客户端开始共享后，协助端可在画面窗口切换画质。每次开始共享时使用标准档。
 
@@ -35,7 +37,7 @@ node operator-cli/index.js 123456 --url wss://assist.example.com/assist --run ./
 | 标准 | 1280×720 | 15 帧/秒 | 900 kbps |
 | 清晰 | 1920×1080 | 15 帧/秒 | 1.8 Mbps |
 
-视频和命令分别走媒体轨和数据通道，共用连接和链路带宽。遇到拥塞时可切到省流档，Windows 端也可停止共享来释放视频带宽。
+视频走媒体轨，键鼠和命令走数据通道。连接拥塞时会丢弃积压的鼠标移动和滚轮事件。遇到拥塞可以切到省流档，Windows 端也可停止共享来释放视频带宽。Windows 键鼠由 [Windows Input Simulator](https://github.com/michaelnoonan/inputsimulator) 注入到当前桌面，受 Windows 原有的权限限制。
 
 配置 CLI 的 `init` 把服务器地址和设备公开 ID 保存到当前用户的 `assist-config.json`，默认使用当前设备的 ID。如果 Windows 和 Mac 都要发起协助，在两台设备分别执行 `device-id`，然后运行 `init` 时在服务器地址后传入英文逗号分隔的两个 ID。配置文件可以复制到打包用的 Windows 电脑。
 

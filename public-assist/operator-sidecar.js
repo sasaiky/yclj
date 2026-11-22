@@ -1,8 +1,8 @@
-const { app } = require('electron');
+const app = process.versions.electron ? require('electron').app : null;
 const { connectPeer } = require('./peer');
 const { readInvite, getIdentity } = require('./protocol');
 
-app.disableHardwareAcceleration();
+app?.disableHardwareAcceleration();
 let peer;
 let exiting = false;
 
@@ -10,11 +10,16 @@ function send(message) {
   if (process.connected) process.send(message, () => {});
 }
 
+function quit(code) {
+  if (app) app.exit(code);
+  else process.exit(code);
+}
+
 function exit(code = 0) {
   if (exiting) return;
   exiting = true;
   peer?.close();
-  app.exit(code);
+  quit(code);
 }
 
 process.on('disconnect', () => exit());
@@ -27,12 +32,15 @@ process.on('message', input => {
 process.once('message', async config => {
   if (exiting) return;
   try {
-    app.setPath('userData', config.profile);
-    await app.whenReady();
+    if (app) {
+      app.setPath('userData', config.profile);
+      await app.whenReady();
+    }
     if (exiting) return;
     const target = config.pin ? { pin: config.pin, url: config.url } : { invite: readInvite(config.invitation) };
+    const rtcFactory = app ? undefined : require('./rtc-native').createRtcFactory(config.nativeViewer, config.profile);
     peer = connectPeer({ identity: getIdentity(config.deviceDirectory), ...target,
-      operator: true, relayOnly: config.relayOnly, viewScreen: config.viewScreen, operatorPassword: config.operatorPassword });
+      operator: true, relayOnly: config.relayOnly, viewScreen: config.viewScreen, operatorPassword: config.operatorPassword, rtcFactory });
     config.operatorPassword = undefined;
     peer.on('waiting', device => send({ type: 'session', action: 'awaiting_approval', device }));
     peer.on('pairing', () => send({ type: 'session', action: 'connecting' }));
@@ -42,8 +50,8 @@ process.once('message', async config => {
     peer.on('close', (code, message) => {
       if (exiting) return;
       exiting = true;
-      if (!process.connected) return app.exit(0);
-      process.send({ type: 'assist_closed', code, message }, () => app.exit(0));
+      if (!process.connected) return quit(0);
+      process.send({ type: 'assist_closed', code, message }, () => quit(0));
     });
   } catch (error) {
     if (!process.connected) return exit(1);
